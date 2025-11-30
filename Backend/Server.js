@@ -35,10 +35,10 @@ const LogModel = mongoose.model('CameraLog', LogSchema);
 
 // 3. VARIABLE EN MEMORIA PARA ESTADO ACTUAL (Para rapidez en la demo)
 let estadoActualCajas = [
-    { id: 101, nombre: 'Caja 01', estado: 'ABIERTA', conteo: 0, umbral: 5 },
-    { id: 102, nombre: 'Caja 02', estado: 'ABIERTA', conteo: 0, umbral: 5 },
-    { id: 103, nombre: 'Caja 03', estado: 'CERRADA', conteo: 0, umbral: 8 },
-    { id: 104, nombre: 'Caja 04', estado: 'ABIERTA', conteo: 0, umbral: 4 },
+    { id: 101, nombre: 'Caja 1', estado: 'ABIERTA', conteo: 0, umbral: 5 },
+    { id: 102, nombre: 'Caja 2', estado: 'ABIERTA', conteo: 0, umbral: 5 },
+    { id: 103, nombre: 'Caja 3', estado: 'ABIERTA', conteo: 0, umbral: 8 },
+    { id: 104, nombre: 'Caja 4', estado: 'ABIERTA', conteo: 0, umbral: 4 },
 ];
 
 let ultimasAlertas = [];
@@ -55,6 +55,8 @@ app.post('/api/captura', async (req, res) => {
     const cajaIndex = estadoActualCajas.findIndex(c => c.id === id_caja);
     if (cajaIndex !== -1) {
         estadoActualCajas[cajaIndex].conteo = personas;
+        // Marcar la caja como ABIERTA si recibe datos (sincronizar con simulación de cámaras)
+        estadoActualCajas[cajaIndex].estado = 'ABIERTA';
         
         // B. Lógica de Negocio (Simulando el Trigger de Oracle en Backend)
         const umbral = estadoActualCajas[cajaIndex].umbral;
