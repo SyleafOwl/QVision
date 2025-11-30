@@ -6,7 +6,7 @@
 
 const axios = require('axios');
 
-const API_URL = 'http://localhost:3000/api/ingesta';
+const API_URL = 'http://localhost:3000/api/captura';
 
 // Configuración de Cajas para simular
 const CAJAS = [101, 102, 104]; // IDs de cajas abiertas

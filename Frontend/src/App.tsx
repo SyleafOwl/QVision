@@ -42,20 +42,38 @@ export default function App() {
 				const res = await fetch(API_URL, { headers: { 'Accept': 'application/json' } });
 				if (!res.ok) throw new Error('HTTP ' + res.status);
 				const json = await res.json();
-				if (!cancelado) {
-					setCajas(Array.isArray(json.cajas) ? json.cajas : []);
-					setAlertas(Array.isArray(json.alertas) ? json.alertas : []);
-					setIsConnected(true);
-				}
+				if (cancelado) return;
+				// Mapear estructura del backend (nombre, conteo) a la interfaz del frontend (numero, personas)
+				const rawCajas = Array.isArray(json.cajas) ? json.cajas : [];
+				const cajasMapeadas: Caja[] = rawCajas.map((c: any) => ({
+					id: c.id,
+					numero: c.nombre ?? `Caja ${c.id}`,
+					estado: c.estado ?? 'CERRADA',
+					personas: typeof c.conteo === 'number' ? c.conteo : 0,
+					umbral: typeof c.umbral === 'number' ? c.umbral : 5
+				}));
+				// Mapear alertas, asignando tipo por mensaje si no viene
+				const rawAlertas = Array.isArray(json.alertas) ? json.alertas : [];
+				const alertasMapeadas: Alerta[] = rawAlertas.map((a: any) => ({
+					id: a.id ?? Date.now(),
+					mensaje: a.mensaje ?? 'Alerta',
+					hora: a.hora ?? new Date().toLocaleTimeString(),
+					tipo: /SATURACIÓN|SOBRECARGA|EXCEDIDA/i.test(a.mensaje || '') ? 'danger' : 'neutral'
+				}));
+				setCajas(cajasMapeadas);
+				setAlertas(alertasMapeadas);
+				setIsConnected(true);
+				// Debug opcional en consola
+				// console.log('✅ Datos actualizados', { cajasMapeadas, alertasMapeadas });
 			} catch (e) {
 				if (!cancelado) {
 					setIsConnected(false);
+					// console.warn('⚠️ Error fetch dashboard:', e);
 				}
 			}
 		}
-		// Primera carga inmediata
 		fetchData();
-		const id = setInterval(fetchData, 1000); // Polling cada 1000ms
+		const id = setInterval(fetchData, 1000);
 		return () => { cancelado = true; clearInterval(id); };
 	}, []);
 

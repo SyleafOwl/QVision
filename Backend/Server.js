@@ -17,7 +17,7 @@ app.use(express.json());
 
 // 1. CONEXIÓN REAL A MONGODB
 // Asegúrate de tener MongoDB Compass abierto y conectado a localhost:27017
-mongoose.connect('mongodb://localhost:27017/qvision_real', {
+mongoose.connect('mongodb+srv://admin:password1234@cluster.vrbepfq.mongodb.net/?appName=Cluster', {
     serverSelectionTimeoutMS: 5000
 }).then(() => console.log('✅ CONEXIÓN EXITOSA A MONGODB'))
   .catch(err => console.error('❌ ERROR CONECTANDO A MONGO:', err));
