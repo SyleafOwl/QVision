@@ -71,3 +71,32 @@ export default defineConfig([
   },
 ])
 ```
+
+## Electron (Desktop) Mode
+
+Integrate this frontend as a desktop app.
+
+### Development
+```powershell
+cd "d:\Codes\GitHub\QVision\Frontend"
+npm install
+npm run dev:electron
+```
+
+If you see an ExecutionPolicy error in PowerShell:
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+Temporary bypass (single run):
+```powershell
+powershell -ExecutionPolicy Bypass -Command "npm run dev:electron"
+```
+
+### Production-like
+```powershell
+npm run build
+electron ./electron/main.cjs
+```
+
+The Electron entry file: `electron/main.cjs`.
+

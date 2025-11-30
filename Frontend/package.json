@@ -1,10 +1,11 @@
 {
-  "name": "frontend",
+  "name": "qvision",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "cross-env VITE_DEV=1 concurrently \"vite\" \"wait-on http://localhost:5173 && electron ./electron/main.cjs\"",
+    "dev:electron": "cross-env VITE_DEV=1 concurrently \"vite\" \"wait-on http://localhost:5173 && electron ./electron/main.cjs\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -12,7 +13,8 @@
   "dependencies": {
     "lucide-react": "^0.555.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "electron": "29.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -29,6 +31,9 @@
     "vite": "^7.2.4",
     "tailwindcss": "^3.4.15",
     "postcss": "^8.4.47",
-    "autoprefixer": "^10.4.20"
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.0.1",
+    "cross-env": "^7.0.3"
   }
 }
