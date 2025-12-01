@@ -17,7 +17,7 @@ app.use(express.json());
 
 // 1. CONEXIÓN REAL A MONGODB
 // Asegúrate de tener MongoDB Compass abierto y conectado a localhost:27017
-mongoose.connect('mongodb+srv://admin:password1234@cluster.vrbepfq.mongodb.net/?appName=Cluster', {
+mongoose.connect('mongodb+srv://admin:password1234@cluster.vrbepfq.mongodb.net/TablasCajas?retryWrites=true&w=majority&appName=Cluster', {
     serverSelectionTimeoutMS: 5000
 }).then(() => console.log('✅ CONEXIÓN EXITOSA A MONGODB'))
   .catch(err => console.error('❌ ERROR CONECTANDO A MONGO:', err));
@@ -35,10 +35,10 @@ const LogModel = mongoose.model('CameraLog', LogSchema);
 
 // 3. VARIABLE EN MEMORIA PARA ESTADO ACTUAL (Para rapidez en la demo)
 let estadoActualCajas = [
-    { id: 101, nombre: 'Caja 1', estado: 'ABIERTA', conteo: 0, umbral: 5 },
-    { id: 102, nombre: 'Caja 2', estado: 'ABIERTA', conteo: 0, umbral: 5 },
-    { id: 103, nombre: 'Caja 3', estado: 'ABIERTA', conteo: 0, umbral: 8 },
-    { id: 104, nombre: 'Caja 4', estado: 'ABIERTA', conteo: 0, umbral: 4 },
+    { id: 101, nombre: 'Caja 1', estado: 'ABIERTA', conteo: 0, umbral: 7 },
+    { id: 102, nombre: 'Caja 2', estado: 'ABIERTA', conteo: 0, umbral: 7 },
+    { id: 103, nombre: 'Caja 3', estado: 'ABIERTA', conteo: 0, umbral: 9 },
+    { id: 104, nombre: 'Caja 4', estado: 'ABIERTA', conteo: 0, umbral: 6 },
 ];
 
 let ultimasAlertas = [];
@@ -60,7 +60,7 @@ app.post('/api/captura', async (req, res) => {
         
         // B. Lógica de Negocio (Simulando el Trigger de Oracle en Backend)
         const umbral = estadoActualCajas[cajaIndex].umbral;
-        const hayAlerta = personas >= umbral;
+        const hayAlerta = personas > umbral; // alerta sólo si excede claramente el umbral
 
         if (hayAlerta) {
             const nuevaAlerta = {
@@ -95,6 +95,48 @@ app.get('/api/dashboard', (req, res) => {
         cajas: estadoActualCajas,
         alertas: ultimasAlertas
     });
+});
+
+// RUTA 3: Predicción sencilla basada en promedio móvil (EMA)
+app.get('/api/prediccion', async (req, res) => {
+    try {
+        // Obtener últimos 200 logs
+        const logs = await LogModel.find({}).sort({ timestamp: -1 }).limit(200).lean();
+        const porCaja = new Map();
+        logs.forEach(l => {
+            const id = Number(String(l.camera_id).replace(/[^0-9]/g, ''));
+            if (!porCaja.has(id)) porCaja.set(id, []);
+            porCaja.get(id).push(l.personas || 0);
+        });
+        // EMA por caja y ocupación relativa
+        let sumOcupRel = 0;
+        let abiertas = 0;
+        estadoActualCajas.forEach(c => {
+            if (c.estado === 'ABIERTA') {
+                abiertas++;
+                const serie = porCaja.get(c.id) || [c.conteo];
+                const alpha = 0.3; // suavizado
+                let ema = serie[0] || 0;
+                for (let i = 1; i < serie.length; i++) {
+                    ema = alpha * serie[i] + (1 - alpha) * ema;
+                }
+                const ocupRel = c.umbral > 0 ? (ema / c.umbral) : 0;
+                sumOcupRel += ocupRel;
+            }
+        });
+        const ocupProm = abiertas === 0 ? 0 : sumOcupRel / abiertas;
+        const porcentaje = Math.min(100, Math.round(ocupProm * 80 + 5));
+        const sugerencia = porcentaje > 50 ? 'Abrir nueva caja' : 'Carga estable';
+        res.json({ porcentaje, ventanaMinutos: 20, sugerencia });
+    } catch (e) {
+        console.error('Error calculando predicción:', e);
+        // Fallback: usar estado en memoria
+        const abiertas = estadoActualCajas.filter(c => c.estado === 'ABIERTA');
+        const ocupRel = abiertas.length === 0 ? 0 : abiertas.reduce((acc, c) => acc + (c.conteo / c.umbral), 0) / abiertas.length;
+        const porcentaje = Math.min(100, Math.round(ocupRel * 80 + 5));
+        const sugerencia = porcentaje > 50 ? 'Abrir nueva caja' : 'Carga estable';
+        res.json({ porcentaje, ventanaMinutos: 20, sugerencia, fallback: true });
+    }
 });
 
 // INICIAR SERVIDOR

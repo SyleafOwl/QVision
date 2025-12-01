@@ -49,11 +49,19 @@ export const SimulacionCamarasProvider: React.FC<{ children: React.ReactNode }> 
         const actualizadas = prev.map(c => {
         // Clonar grupos
         let grupos = [...c.grupos];
-        // Aparición: sólo añadir nuevo grupo (1-3) al final, no eliminar aleatorio
-        const maxGruposVisibles = 12; // 3 filas * 4 grupos
-        if (c.estado === 'ABIERTA' && grupos.length < maxGruposVisibles && Math.random() < 0.12) {
-          const nuevoGrupo = 1 + Math.floor(Math.random() * 3); // 1-3 personas
-          grupos.push(nuevoGrupo);
+        // Aparición: añadir nuevos grupos muy paulatinamente para evitar demasiados carritos
+        const maxGruposVisibles = 8; // limitar capacidad visible aún más
+        if (c.estado === 'ABIERTA' && grupos.length < maxGruposVisibles) {
+          // Aparición lenta (6% de los ticks)
+          if (Math.random() < 0.06) {
+            const nuevoGrupo = 1 + Math.floor(Math.random() * 3); // 1-3 personas
+            grupos.push(nuevoGrupo);
+          }
+          // Ocasional "pico" para provocar alguna sobrecarga real (2% de los ticks)
+          else if (Math.random() < 0.02) {
+            const burstGrupo = 2 + Math.floor(Math.random() * 2); // 2-3 personas
+            grupos.push(burstGrupo);
+          }
         }
 
         let atendiendo = c.atendiendo;

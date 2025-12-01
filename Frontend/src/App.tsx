@@ -22,13 +22,7 @@ export default function App() {
 	// Derivados
 	const totalPersonas = cajas.reduce((acc, c) => acc + c.personas, 0);
 	const cajasAbiertas = cajas.filter(c => c.estado === 'ABIERTA').length;
-	const prediccion: PrediccionIA = (() => {
-		const abiertas = cajas.filter(c => c.estado === 'ABIERTA');
-		const ocupacionRelativa = abiertas.length === 0 ? 0 : abiertas.reduce((acc, c) => acc + c.personas / c.umbral, 0) / abiertas.length;
-		const porcentaje = Math.min(100, Math.round(ocupacionRelativa * 70 + 10));
-		const sugerencia = porcentaje > 45 ? 'Abrir nueva caja' : 'Carga estable';
-		return { porcentaje, ventanaMinutos: 20, sugerencia };
-	})();
+	const [prediccion, setPrediccion] = useState<PrediccionIA>({ porcentaje: 0, ventanaMinutos: 20, sugerencia: 'Cargando...' });
 
 	// Persistir tema
 	useEffect(() => { localStorage.setItem('qvision_tema', tema); }, [tema]);
@@ -75,7 +69,17 @@ export default function App() {
 		}
 		fetchData();
 		const id = setInterval(fetchData, 1000);
-		return () => { cancelado = true; clearInterval(id); };
+		// fetch predicción EMA cada 5s
+		const predId = setInterval(async () => {
+			try {
+				const res = await fetch('http://localhost:3000/api/prediccion');
+				if (res.ok) {
+					const json = await res.json();
+					setPrediccion(json);
+				}
+			} catch {}
+		}, 5000);
+		return () => { cancelado = true; clearInterval(id); clearInterval(predId); };
 	}, []);
 
 	// Vista Dashboard Operativo
@@ -140,9 +144,6 @@ export default function App() {
 						</tbody>
 					</table>
 				</div>
-			</div>
-			<div className="p-4 bg-gray-100 dark:bg-gray-800 rounded text-center text-gray-500 dark:text-gray-400 text-xs">
-				Mostrando datos simulados desde hook de simulación.
 			</div>
 		</div>
 	);
