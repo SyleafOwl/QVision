@@ -1,15 +1,10 @@
 /**
  * QVISION - MÓDULO DE INGESTA DE CÁMARAS
  * Archivo: SimulaCamaras.js
- * Descripción: Simula la recepción de metadata de video (IA) y su almacenamiento.
+ * Descripción: Simula la recepción de metadata de video (IA) y la envía al Backend.
  */
 
-const { MongoClient } = require('mongodb');
-
-// Configuración de conexión
-const uri = "mongodb://localhost:27017";
-// Timeout corto para que no te quedes esperando si falla
-const client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
+const axios = require('axios');
 
 // DATOS QUE LAS CÁMARAS "ENVÍAN"
 const DATOS_SIMULADOS = [
@@ -29,36 +24,27 @@ const DATOS_SIMULADOS = [
 
 async function iniciarIngesta() {
     console.log("---------------------------------------------------");
-    console.log("🎥 QVISION: INICIANDO SISTEMA DE VISIÓN ARTIFICIAL");
+    console.log("🎥 QVISION: INICIANDO SISTEMA DE VISIÓN ARTIFICIAL (Simulador)");
     console.log("---------------------------------------------------");
-    
+
+    // Enviar al backend SQL (vía API) en lugar de Mongo
+    const API = 'http://localhost:3000/api/captura';
     try {
-        console.log("📡 Intentando conectar al Data Lake (MongoDB)...");
-        
-        await client.connect();
-        
-        const db = client.db('qvision_data');
-        const col = db.collection('logs_video');
-        
-        console.log("✅ Conexión establecida con el servidor de Base de Datos.");
-        console.log("📥 Recibiendo stream de datos...");
-
-        const resultado = await col.insertMany(DATOS_SIMULADOS);
-        console.log(`💾 ÉXITO: Se han guardado ${resultado.insertedCount} registros de video en disco.`);
-
+        console.log("📡 Enviando lecturas simuladas al Backend...");
+        // Mapear simulación a cajas 101 y 102 por simplicidad
+        const payloads = [
+            { id_caja: 101, personas: DATOS_SIMULADOS[0].metricas.personas },
+            { id_caja: 102, personas: DATOS_SIMULADOS[1].metricas.personas },
+        ];
+        const results = await Promise.allSettled(
+            payloads.map(p => axios.post(API, p))
+        );
+        const ok = results.filter(r => r.status === 'fulfilled').length;
+        console.log(`💾 ÉXITO: Se enviaron ${ok}/${payloads.length} lecturas al backend.`);
     } catch (error) {
-        // BLOQUE DE RESPALDO (Por si MongoDB no conecta en la expo)
-        console.log("⚠️ AVISO: No se detectó servidor local de MongoDB activo.");
-        console.log("🔄 Activando MODO DE SIMULACIÓN DE RESPALDO...");
-        console.log("📥 Recibiendo stream de datos...");
-        
-        // Simulamos una espera de procesamiento
-        await new Promise(r => setTimeout(r, 1000));
-        
-        console.log(`💾 ÉXITO (Simulado): Se procesaron ${DATOS_SIMULADOS.length} registros de video.`);
-        console.log("📝 Los datos están listos para ser consumidos por el Dashboard.");
+        console.log("❌ Error enviando lecturas al Backend:", error?.message || error);
+        console.log("🔁 Tip: asegúrate de tener el servidor en http://localhost:3000 corriendo.");
     } finally {
-        await client.close();
         console.log("---------------------------------------------------");
         console.log("🏁 Proceso finalizado correctamente.");
     }

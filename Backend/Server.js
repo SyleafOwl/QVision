@@ -1,11 +1,12 @@
 /**
  * QVISION BACKEND SERVER
- * Tecnologías: Node.js, Express, MongoDB (Mongoose)
+ * Tecnologías: Node.js, Express, MongoDB (Mongoose) + SQL endpoint
  * Función: Recibe datos de cámaras, guarda en BD y sirve al Frontend.
  */
 
 const express = require('express');
 const mongoose = require('mongoose');
+const { runSQL } = require('./sqlEngine');
 const cors = require('cors');
 
 const app = express();
@@ -15,15 +16,13 @@ const PORT = 3000;
 app.use(cors()); // Permite que React (Puerto 5173) hable con Node (Puerto 3000)
 app.use(express.json());
 
-// 1. CONEXIÓN REAL A MONGODB
-// Asegúrate de tener MongoDB Compass abierto y conectado a localhost:27017
+// 1. CONEXIÓN REAL A MONGODB (Atlas)
 mongoose.connect('mongodb+srv://admin:password1234@cluster.vrbepfq.mongodb.net/TablasCajas?retryWrites=true&w=majority&appName=Cluster', {
     serverSelectionTimeoutMS: 5000
 }).then(() => console.log('✅ CONEXIÓN EXITOSA A MONGODB'))
-  .catch(err => console.error('❌ ERROR CONECTANDO A MONGO:', err));
+    .catch(err => console.error('❌ ERROR CONECTANDO A MONGO:', err));
 
 // 2. DEFINICIÓN DEL MODELO (Schema)
-// Así se guardarán los datos en Mongo
 const LogSchema = new mongoose.Schema({
     camera_id: String,
     timestamp: { type: Date, default: Date.now },
@@ -72,7 +71,7 @@ app.post('/api/captura', async (req, res) => {
             if (ultimasAlertas.length > 10) ultimasAlertas.pop(); // Limitar a 10
         }
 
-        // C. GUARDAR EN MONGODB (Persistencia Real)
+        // C. GUARDAR EN MongoDB (Persistencia Real)
         try {
             await LogModel.create({
                 camera_id: `CAM-${id_caja}`,
@@ -100,7 +99,7 @@ app.get('/api/dashboard', (req, res) => {
 // RUTA 3: Predicción sencilla basada en promedio móvil (EMA)
 app.get('/api/prediccion', async (req, res) => {
     try {
-        // Obtener últimos 200 logs
+        // Obtener últimos 200 logs desde Mongo
         const logs = await LogModel.find({}).sort({ timestamp: -1 }).limit(200).lean();
         const porCaja = new Map();
         logs.forEach(l => {
@@ -129,13 +128,76 @@ app.get('/api/prediccion', async (req, res) => {
         const sugerencia = porcentaje > 50 ? 'Abrir nueva caja' : 'Carga estable';
         res.json({ porcentaje, ventanaMinutos: 20, sugerencia });
     } catch (e) {
-        console.error('Error calculando predicción:', e);
+                console.error('Error calculando predicción:', e);
         // Fallback: usar estado en memoria
         const abiertas = estadoActualCajas.filter(c => c.estado === 'ABIERTA');
         const ocupRel = abiertas.length === 0 ? 0 : abiertas.reduce((acc, c) => acc + (c.conteo / c.umbral), 0) / abiertas.length;
         const porcentaje = Math.min(100, Math.round(ocupRel * 80 + 5));
         const sugerencia = porcentaje > 50 ? 'Abrir nueva caja' : 'Carga estable';
         res.json({ porcentaje, ventanaMinutos: 20, sugerencia, fallback: true });
+    }
+});
+
+// 5. ENDPOINT SQL -> MONGO (para clase)
+function sqlExprToMongo(expr) {
+    if (!expr) return {};
+    const op = (expr.operator || '').toUpperCase();
+    if (expr.type === 'binary_expr') {
+        if (op === 'AND' || op === 'OR') {
+            const l = sqlExprToMongo(expr.left);
+            const r = sqlExprToMongo(expr.right);
+            return op === 'AND' ? { $and: [l, r] } : { $or: [l, r] };
+        }
+        const col = expr.left.column;
+        const val = expr.right.value !== undefined ? expr.right.value : expr.right;
+        const numVal = typeof val === 'string' && /^\d+$/.test(val) ? Number(val) : val;
+        const map = {
+            '=': numVal,
+            '>': { $gt: numVal },
+            '<': { $lt: numVal },
+            '>=': { $gte: numVal },
+            '<=': { $lte: numVal },
+            '!=': { $ne: numVal }
+        };
+        return { [col]: map[op] };
+    }
+    return {};
+}
+
+app.post('/api/sql', async (req, res) => {
+    const { sql } = req.body || {};
+    if (!sql || typeof sql !== 'string') return res.status(400).json({ error: 'Falta parámetro sql' });
+    try {
+        const result = await runSQL(mongoose, sql);
+        const payload = Array.isArray(result) ? { rows: result } : result;
+        return res.json(payload);
+    } catch (e) {
+        console.error('Error en /api/sql:', e);
+        return res.status(400).json({ error: 'SQL inválido o no soportado', detail: String(e.message || e) });
+    }
+});
+
+// Ejecutar un archivo .sql del folder Backend/sql
+const fs = require('fs');
+const path = require('path');
+app.post('/api/sql/file', async (req, res) => {
+    const { file } = req.body || {};
+    if (!file || typeof file !== 'string') return res.status(400).json({ error: 'Falta parámetro file' });
+    const base = path.join(__dirname, 'sql');
+    const fullPath = path.join(base, file);
+    try {
+        if (!fullPath.startsWith(base)) return res.status(400).json({ error: 'Ruta inválida' });
+        const sql = fs.readFileSync(fullPath, 'utf8');
+        const statements = sql.split(/;\s*\n|;\s*$/).map(s => s.trim()).filter(Boolean);
+        const results = [];
+        for (const stmt of statements) {
+            const r = await runSQL(mongoose, stmt);
+            results.push(Array.isArray(r) ? { rows: r } : r);
+        }
+        return res.json({ results });
+    } catch (e) {
+        console.error('Error en /api/sql/file:', e);
+        return res.status(400).json({ error: 'No se pudo ejecutar archivo SQL', detail: String(e.message || e) });
     }
 });
 
